@@ -279,7 +279,7 @@ To run the lake on **AWS S3** instead, change `.env`; see [docs/AWS.md](docs/AWS
 │   ├── unit/            # 50 tests, no services needed
 │   ├── e2e/             # full pipeline on a fixture, own bucket + database
 │   └── fixtures/        # 12-row CSV with one example of each real problem
-├── docs/                # decisions, data profile, build steps, quiz, interview prep, AWS, security
+├── docs/                # decisions, data profile, build steps, AWS, security
 ├── docker-compose.yml · Dockerfile · Makefile · .env.example
 └── .github/workflows/ci.yml
 ```
@@ -293,7 +293,6 @@ To run the lake on **AWS S3** instead, change `.env`; see [docs/AWS.md](docs/AWS
 | [STEPS.md](docs/STEPS.md) | How it was built, step by step |
 | [AWS.md](docs/AWS.md) | Running the lake on AWS S3 |
 | [SECURITY.md](docs/SECURITY.md) | Security review: findings, fixes, scans and accepted risks |
-| [QUIZ.md](docs/QUIZ.md) · [INTERVIEW.md](docs/INTERVIEW.md) | Study notes |
 
 ## Data
 

@@ -1,7 +1,7 @@
 # Architecture Decisions
 
-Every non-obvious choice in this project, and why. Each one ends with **Say it**: a one-line
-answer you can give in an interview. Learn the *Say it* lines; understand the rest.
+Every non-obvious choice in this project, and why. Each one ends with **In short**: the decision
+and its reason in one line.
 
 | # | Decision | # | Decision |
 |---|---|---|---|
@@ -30,7 +30,7 @@ answer you can give in an interview. Learn the *Say it* lines; understand the re
 build, test, rerun and debug.
 **Alternative:** Streaming (Kafka + Spark Structured Streaming).
 **Trade-off:** Data is only as fresh as the last batch.
-**Say it:** *"The business questions are daily and monthly, so batch gives the same value as
+**In short:** *"The business questions are daily and monthly, so batch gives the same value as
 streaming at a fraction of the complexity."*
 
 ## D2: ETL for cleaning, ELT for analytics
@@ -39,7 +39,7 @@ views *inside* the warehouse (ELT style).
 **Why:** The raw data is messy and must be fixed before anyone trusts it. Business questions
 change often, and SQL views are the fastest place to change them.
 **Alternative:** Pure ELT: load raw into the warehouse and clean with SQL (e.g. dbt).
-**Say it:** *"Heavy cleaning happens in Spark before the warehouse; business logic lives in SQL
+**In short:** *"Heavy cleaning happens in Spark before the warehouse; business logic lives in SQL
 views, so analysts can change it without touching the pipeline."*
 
 ## D3: Three layers: raw → silver → gold (medallion)
@@ -50,7 +50,7 @@ views, so analysts can change it without touching the pipeline."*
 **Why:** If a cleaning rule is wrong, fix it and **replay from raw**; nothing is lost. Each layer
 can be inspected when debugging. This project used exactly that: the `multiLine` fix (D25) was
 applied by simply re-running from raw.
-**Say it:** *"Raw is immutable, so any bug in cleaning can be fixed and replayed without
+**In short:** *"Raw is immutable, so any bug in cleaning can be fixed and replayed without
 re-collecting data."*
 
 ## D4: S3-compatible object storage as the data lake
@@ -61,7 +61,7 @@ Spark can be scaled or replaced without moving the data.
 Hub on 11 September 2026, two weeks before this was built. Because the code only speaks the S3 API,
 swapping to RustFS was a one-line change in `docker-compose.yml`. Moving to AWS is the same:
 change the endpoint in `.env` (see [AWS.md](AWS.md)).
-**Say it:** *"Storage and compute are decoupled and the code only speaks the S3 API. When MinIO
+**In short:** *"Storage and compute are decoupled and the code only speaks the S3 API. When MinIO
 pulled its images, switching to RustFS was a one-line change."*
 
 ## D5: Parquet, not CSV, after the raw layer
@@ -70,7 +70,7 @@ pulled its images, switching to RustFS was a one-line change."*
 - **Compressed:** much smaller than CSV.
 - **Typed:** the schema travels with the file, so a price is always a number.
 
-**Say it:** *"Parquet is columnar, compressed and carries its schema, so reads are faster and
+**In short:** *"Parquet is columnar, compressed and carries its schema, so reads are faster and
 types can't drift."*
 
 ## D6: Partition by month, one file per month
@@ -80,14 +80,14 @@ types can't drift."*
 pruning**). Partitioning by day would create ~800 folders of tiny files (the **small-files
 problem**), and even one month split into Spark's default number of files would be many
 small files. The biggest month is ~84k rows, a few MB: one file is right.
-**Say it:** *"Partition on how the data is loaded and queried, and size the files so you don't
+**In short:** *"Partition on how the data is loaded and queried, and size the files so you don't
 create the small-files problem."*
 
 ## D7: PySpark, and being honest about it
 **Decision:** Transform with PySpark 3.5.
 **Why:** It is the job's core tool, and the same code scales from half a million rows to billions.
 **Honest trade-off:** 0.5M rows fits in pandas or DuckDB on a laptop and would run faster.
-**Say it:** *"At this size pandas would be faster; I used Spark because the design needs to scale
+**In short:** *"At this size pandas would be faster; I used Spark because the design needs to scale
 100×, and in production I'd pick the tool based on data volume."*
 
 ## D8: Explicit schema, explicit casts
@@ -99,7 +99,7 @@ quantity `"1.5"` to `1`. Here it becomes invalid and is caught by a rule (there'
 for exactly this).
 **Also:** ingest refuses a file whose header differs from the expected one (a **schema
 contract**), so a changed source fails loudly at the door.
-**Say it:** *"Raw is read as strings and cast explicitly, so a bad value is caught by a rule
+**In short:** *"Raw is read as strings and cast explicitly, so a bad value is caught by a rule
 instead of silently becoming NULL, and a changed header fails at the door."*
 
 ## D9: Quarantine bad rows, never silently drop them
@@ -107,7 +107,7 @@ instead of silently becoming NULL, and a changed header fails at the door."*
 the raw values exactly as received (e.g. `#N/A` stays visible).
 **Why:** Dropping hides problems. Quarantine is auditable, measurable (`analytics.dq_error_summary`)
 and reprocessable once a rule is fixed.
-**Say it:** *"Bad data is quarantined with a reason, not deleted. You can't fix what you can't see."*
+**In short:** *"Bad data is quarantined with a reason, not deleted. You can't fix what you can't see."*
 
 ## D10: Idempotent loads: safe to rerun
 **Decision:** Running a month twice gives the same result as running it once.
@@ -121,19 +121,19 @@ and reprocessable once a rule is fixed.
 **Why:** Pipelines fail halfway. If a rerun creates duplicates, every failure becomes a manual
 clean-up. This was tested for real: a bad July 2016 load (see D25) was replaced cleanly by
 rerunning it, and the end-to-end test reruns a month and asserts nothing changes.
-**Say it:** *"Every load is idempotent, so a failed run is fixed by running it again."*
+**In short:** *"Every load is idempotent, so a failed run is fixed by running it again."*
 
 ## D11: Star schema, grain = one order item
 **Decision:** `dw.fact_order_items` (one row per item in an order) with customer, product, date
 and payment-method dimensions. `order_id` stays on the fact as a degenerate dimension.
 **Why:** The **grain** defines what one row means; every measure and query depends on it. Star
 schemas make analytical SQL simple (one join per dimension) and fast.
-**Say it:** *"I declared the grain first, one row per order item, and built the dimensions around it."*
+**In short:** *"I declared the grain first, one row per order item, and built the dimensions around it."*
 
 ## D12: Postgres as the local warehouse
 **Why:** Free, runs in Docker, standard SQL with window functions and transactions.
 **In the cloud:** Redshift, BigQuery or Snowflake play this role.
-**Say it:** *"Postgres stands in for Redshift or BigQuery locally; the modelling and SQL transfer
+**In short:** *"Postgres stands in for Redshift or BigQuery locally; the modelling and SQL transfer
 directly."*
 
 ## D13: Everything in Docker Compose, versions pinned
@@ -142,14 +142,14 @@ whole thing. The image pins Python 3.11, Java 17, PySpark 3.5.9 and the exact `h
 that matches PySpark's bundled Hadoop (3.3.4). The build *checks* that match and fails if it's
 wrong. The container runs as a normal user, not root.
 **Why:** "Works on my machine" disappears; anyone can clone and run it.
-**Say it:** *"The whole stack is reproducible with one command because every dependency is pinned
+**In short:** *"The whole stack is reproducible with one command because every dependency is pinned
 in a container, and the build verifies the Spark and Hadoop versions match."*
 
 ## D14: All configuration from environment variables
 **Decision:** Endpoints, bucket, database and passwords come from `.env`, never from code.
 **Why:** RustFS → AWS S3 is a config change, not a code change, and secrets never get committed.
 The end-to-end test uses this too: it points the same code at a separate bucket and database.
-**Say it:** *"Config lives in the environment, so the same code runs locally, in tests and on AWS,
+**In short:** *"Config lives in the environment, so the same code runs locally, in tests and on AWS,
 and no secret is ever in git."*
 
 ## D15: Simple orchestration first, then Airflow on top
@@ -171,7 +171,7 @@ each (month, step) is already an independent, idempotent task, the DAG is ~30 li
 
 **Verified:** a full Airflow backfill of all 26 months left the warehouse identical to the
 Makefile run (same row counts, same revenue to the paisa).
-**Say it:** *"The same idempotent tasks run from a Makefile or from Airflow. In Airflow it's one
+**In short:** *"The same idempotent tasks run from a Makefile or from Airflow. In Airflow it's one
 DAG run per month with catch-up, so Airflow performs the backfill, and retries are safe."*
 
 ---
@@ -184,7 +184,7 @@ DAG run per month with catch-up, so Airflow performs the backfill, and retries a
 lines are neither: they aren't records, so they're removed and counted.
 **Why:** Not every oddity is wrong. A zero price may be a free gift, and a missing category still
 has a real sale behind it.
-**Say it:** *"Rules have severities: errors are quarantined, warnings are kept and flagged, so we
+**In short:** *"Rules have severities: errors are quarantined, warnings are kept and flagged, so we
 don't throw away real sales."*
 
 ## D17: Don't trust spreadsheet-derived columns; recompute them
@@ -192,13 +192,13 @@ don't throw away real sales."*
 **Why:** They came from spreadsheet formulas: one contains `#REF!`, another stores numbers as
 text. Derived data should come from the pipeline, where it's tested. The fiscal year, for
 example, is recomputed in `dim_date` (Pakistan's July–June year).
-**Say it:** *"I only trust source fields; anything derived is recomputed in the pipeline, where it's tested."*
+**In short:** *"I only trust source fields; anything derived is recomputed in the pipeline, where it's tested."*
 
 ## D18: `grand_total` is order-level, so revenue is computed per item
 **Decision:** Revenue = `price × qty − discount`, per item. `grand_total` is not in the fact table.
 **Why:** It's the order total copied onto every item row; summing it counts a three-item order
 three times. This is the classic **grain mismatch**.
-**Say it:** *"Profiling showed grand_total was an order-level value repeated on every item, so
+**In short:** *"Profiling showed grand_total was an order-level value repeated on every item, so
 summing it would double-count; I computed revenue at the item grain instead."*
 
 ## D19: Our own status grouping (a documented assumption)
@@ -216,7 +216,7 @@ revenue counts only `completed` items.
 would be confirmed with the business, and the data shows why that matters: from May 2018
 almost nothing is `complete` while `received` rises to ~41% (finding F11), so the monthly KPIs
 also show `open_order_value`.
-**Say it:** *"The status meanings were ambiguous, so I wrote the mapping down as an explicit
+**In short:** *"The status meanings were ambiguous, so I wrote the mapping down as an explicit
 assumption and surfaced where it matters, instead of silently reporting a revenue collapse."*
 
 ---
@@ -231,7 +231,7 @@ the fact table; the source's natural key (`customer_id`, `sku`) is kept as a uni
 source's key format. SKUs are long strings, for example.
 **Trade-off:** Loading facts needs a lookup join to find each key. The load check (D21) makes
 sure no fact is lost if a lookup fails.
-**Say it:** *"Facts carry integer surrogate keys; natural keys live in the dimensions."*
+**In short:** *"Facts carry integer surrogate keys; natural keys live in the dimensions."*
 
 ## D21: Three reconciliation checks, and the pipeline stops if one fails
 1. **Ingest → Spark:** the rows Spark reads must equal the row count in ingest's manifest. A
@@ -243,7 +243,7 @@ sure no fact is lost if a lookup fails.
 Spark read 8,838 rows for July 2016 where ingest wrote 8,837 (finding F8, fixed in D25).
 The final numbers were also verified against an independent plain-Python implementation of
 the same rules, month by month.
-**Say it:** *"Every stage proves its row counts add up, and one of those checks caught a real CSV
+**In short:** *"Every stage proves its row counts add up, and one of those checks caught a real CSV
 parsing bug before it reached the warehouse."*
 
 ## D22: Guard against late-arriving rows
@@ -253,7 +253,7 @@ parsing bug before it reached the warehouse."*
 land in the wrong folder, or cause a run to overwrite a month it doesn't own.
 **In production:** late data would be routed to its correct month and that month re-processed.
 Zero rows here, but the guard makes the overwrite logic safe.
-**Say it:** *"A batch may only write its own month, so late-arriving rows are caught instead of
+**In short:** *"A batch may only write its own month, so late-arriving rows are caught instead of
 corrupting another month."*
 
 ## D23: Money is stored as decimals, rounded half-up
@@ -262,7 +262,7 @@ Postgres. Never floating point. Values with 3 decimals (11,529 discounts) round 
 **Why:** Floats can't represent money exactly (`0.1 + 0.2 != 0.3`). The rounding rule was
 confirmed the hard way: an independent check disagreed by PKR 0.35 until it used the same
 half-up rounding, after which the total matched exactly.
-**Say it:** *"Money is always decimal, never float, with an explicit rounding rule, verified
+**In short:** *"Money is always decimal, never float, with an explicit rounding rule, verified
 against an independent calculation to the paisa."*
 
 ## D24: Spark tuned for small batches
@@ -276,7 +276,7 @@ against an independent calculation to the paisa."*
   **ran out of memory while planning a one-row test**. Turning it off fixed it (the test
   suite went from out-of-memory to 45 tests in 32 s), and this workload gains nothing from it.
 
-**Say it:** *"I diagnosed an out-of-memory error that happened during query planning, not
+**In short:** *"I diagnosed an out-of-memory error that happened during query planning, not
 execution: constraint propagation exploding over many derived columns. I turned it off and
 flattened the plan."*
 
@@ -284,7 +284,7 @@ flattened the plan."*
 **Decision:** Spark reads raw CSV with `multiLine=true`; line breaks inside values become a space.
 **Why:** 11 rows have a line break inside a quoted SKU. Without `multiLine`, Spark splits such a
 row into two broken records. Found by reconciliation check 1 (D21).
-**Say it:** *"A reconciliation check caught Spark splitting quoted values with line breaks; the
+**In short:** *"A reconciliation check caught Spark splitting quoted values with line breaks; the
 fix was multiLine parsing, and a replay from raw corrected the warehouse."*
 
 ## D26: Staging tables and rebuildable views
@@ -295,7 +295,7 @@ Views hold no data, so rebuilding them means a changed view always applies clean
 **Loads never overlap:** every load shares the staging tables, so `gold.py` holds a Postgres
 advisory lock from the staging write to the commit; a second load simply waits. Without it, two
 loads started at once could interleave in a way the row-count check can't always catch.
-**Say it:** *"Staging is disposable and unlogged; views are code, rebuilt on every deploy."*
+**In short:** *"Staging is disposable and unlogged; views are code, rebuilt on every deploy."*
 
 ---
 
@@ -309,7 +309,7 @@ bypass `ufw`. The review found Postgres reachable on the machine's LAN address w
 password, as a superuser, which in Postgres can run shell commands. Binding to localhost closes
 that, and makes the local-only shortcuts (simple passwords, Airflow without a login) safe to keep.
 **Trade-off:** Other machines can't open the UIs; use an SSH tunnel if you need to.
-**Say it:** *"Dev services bind to localhost only. A security review found Postgres reachable from
+**In short:** *"Dev services bind to localhost only. A security review found Postgres reachable from
 the Wi-Fi with a default superuser password, so I closed the exposure instead of relying on the
 password."*
 
@@ -325,7 +325,7 @@ Postgres JDBC driver (3 HIGH CVEs) and the AWS SDK bundle (19 → 12).
 **Accepted risk:** PySpark 3.5 bundles older Hadoop, Netty and Jackson jars, and `hadoop-aws`
 3.3.4 needs AWS SDK v1, which is past end of support. Only Spark 4 fixes those, so they are
 documented with that upgrade path rather than hidden.
-**Say it:** *"Dependencies are pinned and checksummed, and CI scans for secrets, CVEs and
+**In short:** *"Dependencies are pinned and checksummed, and CI scans for secrets, CVEs and
 misconfigurations on every push. What can't be fixed without a major Spark upgrade is documented as
 an accepted risk, with the upgrade path."*
 
@@ -339,5 +339,5 @@ are short-lived and rotated automatically, so there is nothing to leak. The IAM 
 bucket only ([AWS.md](AWS.md)).
 **Verified:** gitleaks finds no secret in any commit, and the Spark UI shows the S3 keys as
 `*********(redacted)`.
-**Say it:** *"No secret is in the code or the git history. On AWS the pipeline needs no keys at all:
+**In short:** *"No secret is in the code or the git history. On AWS the pipeline needs no keys at all:
 it uses the IAM role of wherever it runs, limited to one bucket."*

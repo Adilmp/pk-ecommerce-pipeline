@@ -1,8 +1,6 @@
 # How it was built, step by step
 
 Each step says what was built, where the code is, how to run it, and how we know it works.
-Read it in order: it's the story you tell when someone asks *"walk me through how you built it."*
-After each step, the matching section of [QUIZ.md](QUIZ.md) checks you understood it.
 
 | Step | What | Key files |
 |---|---|---|
