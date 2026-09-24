@@ -20,9 +20,9 @@ Every number here comes from the actual run.
 > with SQL views: revenue growth, category share, cash on delivery vs prepaid, cohort retention.
 >
 > Every load is idempotent, so a failed run is fixed by running it again, and every stage proves
-> its row counts add up. It all runs in Docker Compose with one command, it has 45 unit tests and
-> an end-to-end test in CI, Airflow can schedule it month by month, and moving it to AWS S3
-> is a config change.
+> its row counts add up. It all runs in Docker Compose with one command, it has 50 unit tests,
+> an end-to-end test and security scans in CI, Airflow can schedule it month by month, and moving
+> it to AWS S3 is a config change.
 >
 > It connects to my background: I spent two years on data quality for AI training data at CNTXT
 > and Turing, and this is the pipeline built around that skill."
@@ -64,6 +64,15 @@ half-up. Once both used half-up, it matched to the paisa."
 its images from Docker Hub. Because my code only speaks the S3 API and all endpoints are
 configuration, I swapped in RustFS with a one-line change in the Compose file. That's exactly why
 you don't couple code to a vendor."
+
+**"Tell me about a security issue you found."** (the exposed database)
+"I reviewed the project against a security checklist. The biggest finding wasn't in my code: Docker
+publishes ports on every network interface by default, and its rules bypass the host firewall. So
+Postgres, with the default password and a superuser account, was reachable from anyone on the same
+Wi-Fi, and a Postgres superuser can even run shell commands. I bound every port to localhost,
+tested that the LAN connection was refused, and wrote it up as a decision. The same review
+upgraded a JDBC driver with three HIGH CVEs, added checksums to every downloaded jar, and put
+secret, dependency and config scans into CI."
 
 **"What did you learn from the data?"**
 - "White Friday, November 2017, brought in PKR 296 million of completed revenue, about 31% of the
@@ -110,8 +119,16 @@ one run per month, ingest then silver then gold, with catch-up on, so Airflow it
 leaves the warehouse identical to the Makefile run."
 
 **How would you move it to AWS?**
-"S3 for the lake: change the endpoint and keys in the environment. An IAM user or role with access
-to that one bucket only. EMR or Glue for Spark, Redshift for the warehouse."
+"S3 for the lake: change the endpoint in the environment. On AWS compute, leave the keys empty and
+the pipeline uses the IAM role, limited to that one bucket. EMR or Glue for Spark, Redshift for the
+warehouse, and `PGSSLMODE=require` for TLS to the database."
+
+**How did you secure it?**
+"No secrets in code or git: config comes from a git-ignored `.env`, and CI scans the whole git
+history with gitleaks. Services listen on localhost only. Queries are parameterised. Dependencies
+are pinned, jars are checksum-verified, and CI runs pip-audit, trivy and bandit rules on every push.
+On AWS it runs on an IAM role limited to one bucket, with no keys at all. What I couldn't fix,
+CVEs inside Spark 3.5's own jars, is documented as an accepted risk with the upgrade path."
 
 **What would you do differently with more time?**
 "dbt for the SQL layer with its tests, Airflow alerts on failure, SCD Type 2 for product categories,

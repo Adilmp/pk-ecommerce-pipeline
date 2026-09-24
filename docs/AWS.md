@@ -35,6 +35,11 @@ access to **that one bucket only**:
 
 Then create an **access key** for the user (*Security credentials → Create access key*).
 
+**Running on AWS compute (EC2, ECS)?** Skip the access key: attach the same policy to an **IAM
+role** for the instance or task, and leave both key variables empty in step 3. boto3 and Spark
+then use AWS's default credential chain, which picks up the role's short-lived credentials, so
+there is no long-lived key to leak (decision D29).
+
 ## 3. Point the pipeline at S3
 In `.env` (never committed):
 
@@ -46,7 +51,9 @@ AWS_SECRET_ACCESS_KEY=<secret access key>
 AWS_REGION=ap-south-1
 ```
 
-An empty `S3_ENDPOINT` tells both boto3 and Spark to use AWS's regional endpoint instead of RustFS.
+An empty `S3_ENDPOINT` tells both boto3 and Spark to use AWS's regional endpoint instead of RustFS,
+over HTTPS. With an IAM role, leave `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` empty too.
+For a cloud database such as Amazon RDS, add `PGSSLMODE=require` so both database drivers use TLS.
 
 ## 4. Run it
 
@@ -64,7 +71,9 @@ bucket afterwards if you don't need it.
 ## What would change in production
 - **Compute:** Spark on **EMR** or **AWS Glue** instead of one container.
 - **Warehouse:** **Redshift** (or Athena querying the Parquet directly).
-- **Credentials:** an **IAM role** attached to the compute instead of access keys.
+- **Credentials:** an **IAM role** attached to the compute instead of access keys (already
+  supported: leave the keys empty), and the database password in AWS Secrets Manager.
+  See [SECURITY.md](SECURITY.md) for the rest of the checklist.
 - **Writes to S3:** Hadoop's S3A *magic committer*, which makes Spark's output commits fast and
   safe on S3 (renames are expensive there).
 - **Scheduling:** Airflow / MWAA, one task per step.

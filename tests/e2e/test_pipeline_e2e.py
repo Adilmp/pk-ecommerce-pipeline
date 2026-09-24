@@ -29,6 +29,8 @@ E2E_ENV = {
 
 @pytest.fixture(scope="module")
 def pipeline_env():
+    from psycopg import sql
+
     from pipeline.config import get_settings
     from pipeline.db import connect
     from pipeline.storage import s3_client
@@ -40,7 +42,7 @@ def pipeline_env():
 
     # Clean up: drop the test database and empty + delete the test bucket.
     with connect(settings, dbname="postgres", autocommit=True) as conn:
-        conn.execute(f"DROP DATABASE IF EXISTS {E2E_ENV['PGDATABASE']} WITH (FORCE)")
+        conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(settings.pg_database)))
     client = s3_client(settings)
     paginator = client.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=settings.s3_bucket):

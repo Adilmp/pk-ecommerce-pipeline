@@ -21,6 +21,9 @@ def connect(settings: Settings, dbname: str | None = None, autocommit: bool = Fa
         user=settings.pg_user,
         password=settings.pg_password,
         dbname=dbname or settings.pg_database,
+        # Always explicit: "prefer" is libpq's own default, and an explicit value stops an empty
+        # PGSSLMODE variable in the environment from breaking the connection.
+        sslmode=settings.pg_sslmode or "prefer",
         autocommit=autocommit,
     )
 

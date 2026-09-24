@@ -2,14 +2,17 @@
 #   make all            build, start, ingest and backfill everything, then print the report
 #   make run MONTH=2017-03
 
-COMPOSE := docker compose
-JOB     := $(COMPOSE) run --rm pipeline
-MONTH   ?= 2016-07
+COMPOSE  := docker compose
+JOB      := $(COMPOSE) run --rm pipeline
+MONTH    ?= 2016-07
+GITLEAKS := ghcr.io/gitleaks/gitleaks:v8.30.1
+TRIVY    := aquasec/trivy:0.74.0
 
-.PHONY: help env build up down init ingest run backfill report charts test test-e2e lint psql all airflow airflow-down clean
+.PHONY: help env build up down init ingest run backfill report charts test test-e2e lint psql all airflow airflow-down clean \
+        security scan-secrets scan-deps scan-config scan-image
 
 help:  ## show this help
-	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-13s %s\n", $$1, $$2}'
 
 env:  ## create .env from .env.example (if missing)
 	@test -f .env || (cp .env.example .env && echo "created .env")
@@ -63,3 +66,19 @@ airflow-down:  ## stop Airflow
 
 clean:  ## stop everything AND delete the lake and warehouse data
 	$(COMPOSE) --profile airflow down -v
+
+# --- Security scans (decision D28). CI runs the secret, dependency and config scans on every push. ---
+security: scan-secrets scan-deps scan-config scan-image  ## run every security scan
+
+scan-secrets:  ## search every commit for leaked keys and passwords (gitleaks)
+	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$$PWD:/repo:ro" $(GITLEAKS) git /repo --log-opts=--all --redact
+
+scan-deps: build  ## check the image's Python packages for known CVEs (pip-audit)
+	$(COMPOSE) run --rm --no-deps pipeline sh -c 'pip install -q --user --no-warn-script-location pip-audit==2.10.1 && python -m pip_audit'
+
+scan-config:  ## check the Dockerfiles for security misconfigurations (trivy)
+	docker run --rm -v "$$PWD:/src:ro" $(TRIVY) config --exit-code 1 --severity HIGH,CRITICAL /src
+
+scan-image: build  ## list fixable HIGH/CRITICAL CVEs in the pipeline image; report only (trivy)
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v pk-ecommerce-trivy-cache:/root/.cache \
+	  $(TRIVY) image --quiet --table-mode detailed --severity HIGH,CRITICAL --ignore-unfixed pk-ecommerce-pipeline:latest

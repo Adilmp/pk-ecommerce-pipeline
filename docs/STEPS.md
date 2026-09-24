@@ -17,6 +17,7 @@ After each step, the matching section of [QUIZ.md](QUIZ.md) checks you understoo
 | 8 | Analytics SQL + charts | `sql/analytics/*.sql`, `charts.py` |
 | 9 | Tests + CI | `tests/`, `.github/workflows/ci.yml` |
 | 10 | AWS and shipping | [AWS.md](AWS.md), `README.md` |
+| 11 | Security review | [SECURITY.md](SECURITY.md) |
 
 ---
 
@@ -90,15 +91,27 @@ dark versions) from those views.
 **Run:** `make report`, `make charts`.
 
 ## Step 9: Tests + CI
-- **Unit tests** (45, about 30 s): every transformation and every rule, on tiny hand-made
+- **Unit tests** (50, about 40 s): every transformation and every rule, on tiny hand-made
   DataFrames. No services needed.
 - **End-to-end test**: a 12-row fixture CSV with one example of each real problem, run through
   the real RustFS and Postgres in a *separate* bucket and database. It asserts exact counts,
   the `grand_total` trap, and that rerunning a month changes nothing.
-- **CI** (GitHub Actions): lint + unit tests, then the end-to-end test in Docker Compose, on every push.
+- **CI** (GitHub Actions): lint + unit tests, then the end-to-end test in Docker Compose, plus
+  security scans (Step 11), on every push.
 
 **Run:** `make test`, `make test-e2e`, `make lint`.
 
 ## Step 10: AWS and shipping
 Moving to AWS S3 is configuration only (see [AWS.md](AWS.md)). The README gives the
 architecture, results and how to run it, and the repo is public on GitHub.
+
+## Step 11: Security review
+The project was checked against a secure-development checklist (see [SECURITY.md](SECURITY.md)).
+The main finding: Docker had published Postgres, RustFS, the Spark UI and Airflow on every network
+interface, so Postgres, with its default password, was reachable from the LAN. Every port now
+listens on `127.0.0.1` only (D27). Also: vulnerable jars upgraded and SHA-256-verified, pip tooling
+upgraded, curl removed from the image, and CI scans for secrets, CVEs and misconfigurations on
+every push (D28). On AWS the pipeline can now run on an IAM role with no keys (D29).
+**Run:** `make security`.
+**Verified:** the LAN connection is refused, all tests pass, and a full rebuild from scratch gives
+exactly the same numbers with the upgraded jars.

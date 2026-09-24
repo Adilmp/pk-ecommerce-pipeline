@@ -19,7 +19,8 @@ quarantined with the reason.
 | Quarantined, with reasons | **9,766** (1.67%) |
 | Completed revenue | **PKR 965.2 million** |
 | Full 26-month backfill | **~4 minutes** on a laptop, one command |
-| Tests | 45 unit tests + an end-to-end test in CI |
+| Tests | 50 unit tests + an end-to-end test in CI |
+| Security | Services on localhost only, no secrets in git, checksummed and scanned dependencies ([SECURITY.md](docs/SECURITY.md)) |
 | Scheduling | Makefile/CLI, or an optional Airflow DAG (one run per month, catch-up backfill) |
 
 ## Architecture
@@ -223,6 +224,7 @@ runs the backfill and prints the report. Afterwards:
 | `make charts` | Regenerate the charts |
 | `make airflow` | Optional: start Airflow on http://localhost:8080; it backfills every month itself |
 | `make test` · `make test-e2e` · `make lint` | Unit tests · end-to-end test · lint |
+| `make security` | Scan for leaked secrets, vulnerable dependencies and Docker misconfigurations |
 | `make down` · `make clean` | Stop (keep data) · stop and delete all data |
 
 The lake's web console is at http://localhost:9001/rustfs/console/ (credentials are in `.env`).
@@ -239,7 +241,7 @@ To run the lake on **AWS S3** instead, change `.env`; see [docs/AWS.md](docs/AWS
 
 ## Design decisions
 
-26 decisions are written up in [DECISIONS.md](docs/DECISIONS.md). The most important:
+29 decisions are written up in [DECISIONS.md](docs/DECISIONS.md). The most important:
 
 - **Idempotent, month-by-month loads:** a failed run is fixed by running it again (D10), which
   is also what makes Airflow's retries and catch-up safe (D15).
@@ -253,6 +255,8 @@ To run the lake on **AWS S3** instead, change `.env`; see [docs/AWS.md](docs/AWS
   *planning* (D24).
 - **Honest trade-off:** at 0.5M rows pandas would be faster; Spark was chosen so the design scales
   (D7).
+- **Security reviewed:** services listen on localhost only, jars are checksum-verified, CI scans
+  for secrets and CVEs, and on AWS it runs on an IAM role with no keys (D27–D29).
 
 ## Project structure
 
@@ -271,10 +275,10 @@ To run the lake on **AWS S3** instead, change `.env`; see [docs/AWS.md](docs/AWS
 │   └── analytics/       # business views
 ├── airflow/             # optional: DAG (one run per month) + image built on the pipeline image
 ├── tests/
-│   ├── unit/            # 45 tests, no services needed
+│   ├── unit/            # 50 tests, no services needed
 │   ├── e2e/             # full pipeline on a fixture, own bucket + database
 │   └── fixtures/        # 12-row CSV with one example of each real problem
-├── docs/                # decisions, data profile, build steps, quiz, interview prep, AWS
+├── docs/                # decisions, data profile, build steps, quiz, interview prep, AWS, security
 ├── docker-compose.yml · Dockerfile · Makefile · .env.example
 └── .github/workflows/ci.yml
 ```
@@ -283,10 +287,11 @@ To run the lake on **AWS S3** instead, change `.env`; see [docs/AWS.md](docs/AWS
 
 | | |
 |---|---|
-| [DECISIONS.md](docs/DECISIONS.md) | Why every choice was made (26 decisions) |
+| [DECISIONS.md](docs/DECISIONS.md) | Why every choice was made (29 decisions) |
 | [DATA_PROFILE.md](docs/DATA_PROFILE.md) | What the raw data really looks like (12 findings) |
 | [STEPS.md](docs/STEPS.md) | How it was built, step by step |
 | [AWS.md](docs/AWS.md) | Running the lake on AWS S3 |
+| [SECURITY.md](docs/SECURITY.md) | Security review: findings, fixes, scans and accepted risks |
 | [QUIZ.md](docs/QUIZ.md) · [INTERVIEW.md](docs/INTERVIEW.md) | Study notes |
 
 ## Data

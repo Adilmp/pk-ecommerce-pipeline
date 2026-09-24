@@ -18,6 +18,9 @@ answer you can give in an interview. Learn the *Say it* lines; understand the re
 | D11 | Star schema, item grain | D24 | Spark tuned for small batches |
 | D12 | Postgres as the warehouse | D25 | CSV read with `multiLine` |
 | D13 | Everything in Docker Compose | D26 | Staging tables and rebuildable views |
+| | | D27 | Services on localhost only |
+| | | D28 | Dependencies pinned, verified, scanned |
+| | | D29 | Credentials: environment only, IAM role on AWS |
 
 ---
 
@@ -285,3 +288,48 @@ fix was multiLine parsing, and a replay from raw corrected the warehouse."*
 **Why:** Staging is temporary by design, so skipping Postgres's write-ahead log makes it faster.
 Views hold no data, so rebuilding them means a changed view always applies cleanly.
 **Say it:** *"Staging is disposable and unlogged; views are code, rebuilt on every deploy."*
+
+---
+
+*D27–D29 came from a security review ([SECURITY.md](SECURITY.md)).*
+
+## D27: Services listen on localhost only
+**Decision:** Every published port (Postgres 5432, RustFS 9000/9001, Spark UI 4040, Airflow 8080)
+is bound to `127.0.0.1`, and every container runs with `no-new-privileges`.
+**Why:** Docker publishes ports on *all* network interfaces by default, and its firewall rules
+bypass `ufw`. The review found Postgres reachable on the machine's LAN address with the default
+password, as a superuser, which in Postgres can run shell commands. Binding to localhost closes
+that, and makes the local-only shortcuts (simple passwords, Airflow without a login) safe to keep.
+**Trade-off:** Other machines can't open the UIs; use an SSH tunnel if you need to.
+**Say it:** *"Dev services bind to localhost only. A security review found Postgres reachable from
+the Wi-Fi with a default superuser password, so I closed the exposure instead of relying on the
+password."*
+
+## D28: Dependencies pinned, verified and scanned
+**Decision:** Python packages are pinned to exact versions. Every downloaded jar is checked against
+a pinned SHA-256, so a tampered download fails the build. The image upgrades pip, setuptools and
+wheel, and removes curl once the jars are in. CI scans every push: gitleaks (secrets in the whole
+git history), pip-audit (known CVEs in Python packages), trivy (Dockerfile misconfigurations), and
+ruff's bandit rules (static analysis) in lint. `make security` runs these plus a trivy image scan.
+**Why:** The pipeline runs whatever its dependencies contain. Pinning makes builds reproducible, a
+checksum proves you got the file you pinned, and scans catch known CVEs. The review upgraded the
+Postgres JDBC driver (3 HIGH CVEs) and the AWS SDK bundle (19 → 12).
+**Accepted risk:** PySpark 3.5 bundles older Hadoop, Netty and Jackson jars, and `hadoop-aws`
+3.3.4 needs AWS SDK v1, which is past end of support. Only Spark 4 fixes those, so they are
+documented with that upgrade path rather than hidden.
+**Say it:** *"Dependencies are pinned and checksummed, and CI scans for secrets, CVEs and
+misconfigurations on every push. What can't be fixed without a major Spark upgrade is documented as
+an accepted risk, with the upgrade path."*
+
+## D29: Credentials: environment only, IAM role on AWS
+**Decision:** Secrets come only from the environment (`.env`, which is git-ignored). On AWS, the
+access keys can be left empty: boto3 and s3a then use AWS's default credential chain, which ends at
+the IAM role of the machine or container. `PGSSLMODE=require` turns on TLS for both database
+drivers.
+**Why:** Long-lived access keys are the most common way cloud accounts leak. A role's credentials
+are short-lived and rotated automatically, so there is nothing to leak. The IAM policy allows one
+bucket only ([AWS.md](AWS.md)).
+**Verified:** gitleaks finds no secret in any commit, and the Spark UI shows the S3 keys as
+`*********(redacted)`.
+**Say it:** *"No secret is in the code or the git history. On AWS the pipeline needs no keys at all:
+it uses the IAM role of wherever it runs, limited to one bucket."*

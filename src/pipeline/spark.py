@@ -28,13 +28,19 @@ def get_spark(settings: Settings, app_name: str = "pk-ecommerce-pipeline") -> Sp
         .config("spark.sql.constraintPropagation.enabled", "false")
         # --- S3 access through the s3a:// filesystem (hadoop-aws) ---
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-        .config(
-            "spark.hadoop.fs.s3a.aws.credentials.provider",
-            "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
-        )
-        .config("spark.hadoop.fs.s3a.access.key", settings.aws_access_key_id)
-        .config("spark.hadoop.fs.s3a.secret.key", settings.aws_secret_access_key)
     )
+    if settings.aws_access_key_id:
+        # Explicit keys (RustFS, or an IAM user on AWS). The Spark UI redacts both values.
+        builder = (
+            builder.config(
+                "spark.hadoop.fs.s3a.aws.credentials.provider",
+                "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
+            )
+            .config("spark.hadoop.fs.s3a.access.key", settings.aws_access_key_id)
+            .config("spark.hadoop.fs.s3a.secret.key", settings.aws_secret_access_key)
+        )
+    # Without keys, s3a uses its default credential chain, which ends with the IAM role of the
+    # machine or container. That is the safest option on AWS: no long-lived keys at all (D29).
     if settings.s3_endpoint:
         # Local S3-compatible server (RustFS): custom endpoint + path-style URLs.
         builder = (

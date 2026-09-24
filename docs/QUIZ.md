@@ -1,10 +1,10 @@
 # Quiz
 
 Answer each question **out loud or on paper first**, then open the answer. If you get one
-wrong, reread the decision it points to (D1–D26 in [DECISIONS.md](DECISIONS.md)) and try the
+wrong, reread the decision it points to (D1–D29 in [DECISIONS.md](DECISIONS.md)) and try the
 question again tomorrow: spaced repetition is what makes it stick.
 
-Sections follow the build steps in [STEPS.md](STEPS.md). 65 questions in total.
+Sections follow the build steps in [STEPS.md](STEPS.md). 71 questions in total.
 
 ---
 
@@ -446,7 +446,7 @@ exported before they finished. That's why the KPIs and chart also show `open_ord
 
 **59. Unit tests vs the end-to-end test: what does each prove?**
 <details><summary>Answer</summary>
-Unit tests (45) prove each transformation and rule works, using tiny hand-made DataFrames and no
+Unit tests (50) prove each transformation and rule works, using tiny hand-made DataFrames and no
 services. The end-to-end test proves the whole system works together (ingest → RustFS → Spark →
 Postgres) with exact expected numbers, and that rerunning a month changes nothing.
 </details>
@@ -455,4 +455,54 @@ Postgres) with exact expected numbers, and that rerunning a month changes nothin
 <details><summary>Answer</summary>
 So it can never overwrite the real data. It's the same code, pointed elsewhere by environment
 variables (D14), and it deletes both when it finishes.
+</details>
+
+---
+
+## Step 11: Security
+
+**66. On which network interfaces does Docker publish a port by default, and why did it matter here?**
+<details><summary>Answer</summary>
+On **all** of them (`0.0.0.0`), and Docker's firewall rules bypass `ufw`. So Postgres, with its
+default password and a superuser account, was reachable by anyone on the same Wi-Fi. Postgres
+superusers can even run shell commands. The fix: publish every port on `127.0.0.1` only. (D27)
+</details>
+
+**67. How do you make sure no secret ever reaches git? Why does the CI secret scan need the full history?**
+<details><summary>Answer</summary>
+Secrets live only in `.env`, which is git-ignored and docker-ignored; the repo has only
+`.env.example` with local placeholder values. gitleaks scans in CI with `fetch-depth: 0`, because a
+secret that was committed and later deleted is still in the history, and still leaked. (D14, D29)
+</details>
+
+**68. How does the pipeline authenticate to S3 on AWS without any access keys?**
+<details><summary>Answer</summary>
+Leave the keys empty. boto3 and s3a then use AWS's default credential chain, which ends at the IAM
+role attached to the machine or container. Its credentials are short-lived and rotated
+automatically, and the role's policy only allows the one bucket. (D29)
+</details>
+
+**69. The version of each jar is already pinned. Why also check a SHA-256?**
+<details><summary>Answer</summary>
+The version says what you *asked for*; the checksum proves what you *got*. If the download is
+tampered with (a compromised mirror, a man-in-the-middle, a re-published artifact), the hash
+doesn't match and the build fails. (D28)
+</details>
+
+**70. The image scan still reports HIGH CVEs. How do you justify shipping it?**
+<details><summary>Answer</summary>
+Everything fixable from this project was fixed: JDBC driver, AWS SDK, pip tooling, curl removed.
+What's left is inside PySpark 3.5's bundled jars, the end-of-life AWS SDK v1 that `hadoop-aws`
+3.3.4 requires, or Debian packages with no fix released yet. Clearing those needs Spark 4, a major
+upgrade. Meanwhile the job only parses trusted files and exposes nothing beyond localhost. It's
+documented as an accepted risk with the upgrade path. "A CVE is present" is not the same as "it's
+exploitable here". (D28)
+</details>
+
+**71. How is SQL injection prevented?**
+<details><summary>Answer</summary>
+Values are always passed as parameters (`%s`, `%(month)s`), never pasted into SQL strings;
+identifiers such as database names go through psycopg's `sql.Identifier`; `--month` must match
+`YYYY-MM`; and CSV values only ever become typed column values, never code. ruff's bandit rules flag
+SQL built from strings on every lint.
 </details>

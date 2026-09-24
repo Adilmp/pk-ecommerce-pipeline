@@ -15,6 +15,7 @@ MONTH_PREFIX = re.compile(rf"^{RAW_PREFIX}/ingest_month=(\d{{4}}-\d{{2}})/$")
 
 def s3_client(settings: Settings):
     # A custom endpoint (RustFS) needs path-style URLs: http://host:9000/bucket/key
+    # Keys of None make boto3 use its default credential chain, e.g. an IAM role (D29).
     config = Config(s3={"addressing_style": "path"}) if settings.s3_endpoint else None
     return boto3.client(
         "s3",

@@ -16,4 +16,9 @@ target-version = "py311"
 extend-exclude = ["airflow/logs"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+# "S" = flake8-bandit: static security checks (SQL built from strings, shell=True, hard-coded
+# passwords, unsafe deserialisation...) on every lint run (decision D28).
+select = ["E", "F", "I", "B", "UP", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # pytest is built on assert
