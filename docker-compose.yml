@@ -1,0 +1,68 @@
+# The whole stack: one command starts the data lake and the warehouse (decision D13).
+# The pipeline container is a "job": it runs a command and exits (`docker compose run`).
+name: pk-ecommerce
+
+services:
+  # S3-compatible object storage = the data lake. RustFS replaces MinIO, whose images were
+  # removed from Docker Hub in Sept 2026. The code only speaks the S3 API, so the swap was
+  # a config change (decisions D4, D14).
+  objectstore:
+    image: rustfs/rustfs:1.0.0
+    environment:
+      RUSTFS_ACCESS_KEY: ${AWS_ACCESS_KEY_ID}
+      RUSTFS_SECRET_KEY: ${AWS_SECRET_ACCESS_KEY}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    volumes:
+      - lake-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9000/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # The warehouse (gold layer). Stands in for Redshift / BigQuery locally (D12).
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+      POSTGRES_DB: ${PGDATABASE}
+    ports:
+      - "5432:5432"
+    volumes:
+      - warehouse-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDATABASE}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # The pipeline: Python + Java + Spark. The repo is mounted, so code edits need no rebuild.
+  pipeline:
+    build:
+      context: .
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    image: pk-ecommerce-pipeline:latest
+    env_file: .env
+    environment:
+      HOME: /home/app
+      SPARK_CONF_DIR: /app/conf
+    volumes:
+      - .:/app
+    ports:
+      - "4040:4040"   # Spark UI while a job is running
+    depends_on:
+      objectstore:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    profiles: ["job"]
+
+volumes:
+  lake-data:
+  warehouse-data:
