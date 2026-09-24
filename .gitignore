@@ -1,0 +1,13 @@
+# data never goes in git
+data/*
+!data/raw/
+data/raw/*
+!data/raw/.gitkeep
+.env
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+spark-warehouse/
+metastore_db/
+derby.log

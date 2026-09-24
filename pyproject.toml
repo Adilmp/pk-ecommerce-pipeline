@@ -1,0 +1,19 @@
+[project]
+name = "pk-ecommerce-pipeline"
+version = "1.0.0"
+description = "Batch data pipeline: Pakistan e-commerce orders -> S3 data lake -> PySpark -> Postgres star schema"
+requires-python = ">=3.11"
+authors = [{ name = "Adil Pervez" }]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests/unit"]
+addopts = "-q -p no:cacheprovider"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["airflow/logs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
