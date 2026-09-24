@@ -159,8 +159,12 @@ gold) as one DAG run per month. Every run of every step, from either route, is l
 `dq.pipeline_runs`.
 **Why:** A working, idempotent pipeline comes first; a scheduler only wires it together. Because
 each (month, step) is already an independent, idempotent task, the DAG is ~30 lines of wiring:
-- `schedule="@monthly"` with `catchup=True`: Airflow itself creates one run per month from July
-  2016 to August 2018. **Airflow does the backfill.**
+- **A data-interval timetable:** each run covers one month and starts once it is over (the March
+  2017 run covers [1 March, 1 April) and starts on 1 April); tasks read `data_interval_start` to
+  know their month. Airflow 3's plain `"@monthly"` would fire at the *start* of the month with an
+  empty interval: fine for a backfill of old data, wrong for a live schedule.
+- `catchup=True`: Airflow itself creates one run per month from July 2016 to August 2018.
+  **Airflow does the backfill.**
 - `max_active_runs=1`: months run in order, one at a time (they share the staging tables).
 - `retries=2`: safe, because every task is idempotent.
 - The Airflow image is built *on top of* the pipeline image, so tasks run exactly the same code.
@@ -230,7 +234,8 @@ sure no fact is lost if a lookup fails.
 **Say it:** *"Facts carry integer surrogate keys; natural keys live in the dimensions."*
 
 ## D21: Three reconciliation checks, and the pipeline stops if one fails
-1. **Ingest → Spark:** the rows Spark reads must equal the row count in ingest's manifest.
+1. **Ingest → Spark:** the rows Spark reads must equal the row count in ingest's manifest. A
+   missing manifest fails too: no count, no proof.
 2. **Silver:** rows read = clean + quarantined + duplicates removed.
 3. **Gold:** rows loaded into the warehouse = rows staged.
 
@@ -287,6 +292,9 @@ fix was multiLine parsing, and a replay from raw corrected the warehouse."*
 (views only) is dropped and rebuilt on every `init`.
 **Why:** Staging is temporary by design, so skipping Postgres's write-ahead log makes it faster.
 Views hold no data, so rebuilding them means a changed view always applies cleanly.
+**Loads never overlap:** every load shares the staging tables, so `gold.py` holds a Postgres
+advisory lock from the staging write to the commit; a second load simply waits. Without it, two
+loads started at once could interleave in a way the row-count check can't always catch.
 **Say it:** *"Staging is disposable and unlogged; views are code, rebuilt on every deploy."*
 
 ---

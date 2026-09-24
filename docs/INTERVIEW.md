@@ -114,8 +114,8 @@ Redshift or BigQuery, and I'd raise the shuffle partitions back up."
 
 **How is it scheduled?**
 "Two ways, running the same code. A Makefile and CLI for development and CI, and an Airflow DAG:
-one run per month, ingest then silver then gold, with catch-up on, so Airflow itself backfills all
-26 months. Retries are safe because every task is idempotent. I checked that the Airflow backfill
+one run per month, ingest then silver then gold. Each run covers one month and starts once that
+month is over, and with catch-up on, Airflow itself backfills all 26 months. Retries are safe because every task is idempotent. I checked that the Airflow backfill
 leaves the warehouse identical to the Makefile run."
 
 **How would you move it to AWS?**

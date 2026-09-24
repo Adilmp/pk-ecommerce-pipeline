@@ -63,7 +63,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - "127.0.0.1:4040:4040"   # Spark UI while a job is running
+      - "127.0.0.1:4040:4040"   # Spark UI while a job runs; `docker compose run` needs --service-ports
     depends_on:
       objectstore:
         condition: service_healthy

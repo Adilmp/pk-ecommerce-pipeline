@@ -110,7 +110,7 @@ order-level, that 44% of the file is blank, and which values are impossible. Non
 in the column names.
 </details>
 
-**16. The file has 1,048,575 lines. Why is that suspicious?**
+**16. The file has exactly 1,048,576 rows, header included. Why is that suspicious?**
 <details><summary>Answer</summary>
 It's Excel's maximum row count. The file was exported from Excel, which padded it with 464,051
 blank lines. Only 584,524 rows are real.
@@ -373,22 +373,22 @@ message if it failed. Failures are the runs you most need to see later.
 
 **61. What does `catchup=True` do in the DAG?**
 <details><summary>Answer</summary>
-When the DAG starts, Airflow creates a run for every missed schedule interval between
-`start_date` and now (or `end_date`): here one run per month from July 2016 to August 2018. That's
+When the DAG starts, Airflow creates a run for every data interval between `start_date` and now
+(or `end_date`) that hasn't run yet: here one run per month from July 2016 to August 2018. That's
 how Airflow performs the backfill.
 </details>
 
-**62. What is the logical date of a DAG run, and how does each task know which month to process?**
+**62. What is a DAG run's data interval, and how does each task know which month to process?**
 <details><summary>Answer</summary>
-The logical date identifies which period the run is for (2017-03-01 for the March 2017 run), not
-when it actually ran. Tasks use the template `{{ logical_date.strftime('%Y-%m') }}`, which Airflow
-fills in per run.
+The data interval is the period the run is responsible for: the March 2017 run covers
+[2017-03-01, 2017-04-01) and starts on 1 April, once March is complete. Tasks use the template
+`{{ data_interval_start.strftime('%Y-%m') }}`, which Airflow fills in per run. (D15)
 </details>
 
 **63. Why `max_active_runs=1`?**
 <details><summary>Answer</summary>
-Months must run one at a time: they share the staging tables, and running in order keeps the
-dimensions' "latest known" values correct.
+Months must run one at a time: they share the staging tables (loads are also serialised by a
+Postgres advisory lock), and running in order keeps the dimensions' "latest known" values correct.
 </details>
 
 **64. Why are `retries=2` safe here?**

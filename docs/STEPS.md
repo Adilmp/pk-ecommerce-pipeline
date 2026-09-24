@@ -79,7 +79,8 @@ non-zero exit code on failure.
 **Run:** `make backfill` → 26 months in ~4 minutes: **584,524 read → 574,758 clean + 9,766 quarantined**.
 
 **Airflow (optional):** `airflow/dags/pk_ecommerce_monthly.py` runs the same steps as one DAG run
-per month (`@monthly`, `catchup=True`, `max_active_runs=1`, `retries=2`).
+per month: a data-interval timetable (the March run covers March and starts on 1 April),
+`catchup=True`, `max_active_runs=1`, `retries=2`.
 **Run:** `make airflow` → open http://localhost:8080; Airflow backfills all 26 months by itself,
 and the warehouse ends up identical to the Makefile run.
 

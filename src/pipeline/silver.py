@@ -56,8 +56,12 @@ def process_month(spark: SparkSession, settings: Settings, month: str) -> dict:
     rows_read = typed.count()
 
     # Check 1: Spark read exactly the rows that ingest wrote (catches CSV parsing problems).
+    # No manifest means nothing to check against, so that fails loudly too.
     manifest = get_json(s3_client(settings), settings, f"{MANIFEST_PREFIX}/orders_{month}.json")
-    if manifest and manifest["rows"] != rows_read:
+    if manifest is None:
+        raise ReconciliationError(f"{month}: no ingest manifest, so the row count can't be checked. "
+                                  "Run `python -m pipeline.ingest` first.")
+    if manifest["rows"] != rows_read:
         raise ReconciliationError(
             f"{month}: ingest wrote {manifest['rows']} rows but Spark read {rows_read}. "
             "Check the CSV parsing options (quotes, line breaks)."
@@ -68,7 +72,7 @@ def process_month(spark: SparkSession, settings: Settings, month: str) -> dict:
     quarantined = transform.quarantined_rows(batch)
 
     metrics = {
-        "manifest_rows": manifest["rows"] if manifest else None,
+        "manifest_rows": manifest["rows"],
         "rows_read": rows_read,
         "duplicates_removed": rows_read - batch.count(),
         "silver_rows": valid.count(),

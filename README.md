@@ -14,7 +14,7 @@ quarantined with the reason.
 
 | | |
 |---|---|
-| Rows read | **584,524** (from a 1,048,575-line Excel export: 44% was blank padding) |
+| Rows read | **584,524** (from an Excel export filled to Excel's 1,048,576-row limit: 44% was blank padding) |
 | Loaded into the warehouse | **574,758** order items · 408,041 orders · 115,117 customers · 83,373 products |
 | Quarantined, with reasons | **9,766** (1.67%) |
 | Completed revenue | **PKR 965.2 million** |
@@ -126,7 +126,7 @@ refunded more, which fits returns after delivery.
 The data was profiled before anything was designed ([DATA_PROFILE.md](docs/DATA_PROFILE.md)).
 The problems it found:
 
-- **The file is an Excel export**, padded to Excel's 1,048,575-row limit (464,051 blank lines),
+- **The file is an Excel export**, padded to Excel's 1,048,576-row limit (464,051 blank lines),
   with formula columns and Excel errors (`#REF!`, `#N/A`) leaking into the data.
 - **`grand_total` is the order total repeated on every item.** Summing it would count a
   3-item order three times, so revenue is computed per item instead (price × qty − discount).
@@ -232,9 +232,10 @@ The lake's web console is at http://localhost:9001/rustfs/console/ (credentials 
 ### Scheduling with Airflow (optional)
 
 `make airflow` starts Airflow 3 with one DAG, [`pk_ecommerce_monthly`](airflow/dags/pk_ecommerce_monthly.py):
-one DAG run per order month, each running **ingest → silver → gold**. With `catchup=True`,
-Airflow creates a run for every month from July 2016 to August 2018 and processes them in order,
-so **Airflow performs the backfill itself**. Retries are safe because every task is idempotent.
+one DAG run per order month, each running **ingest → silver → gold**. Each run covers one month
+as its *data interval* and starts once that month is over (the March run starts on 1 April). With
+`catchup=True`, Airflow creates a run for every month from July 2016 to August 2018 and processes
+them in order, so **Airflow performs the backfill itself**. Retries are safe because every task is idempotent.
 The Airflow image is built on top of the pipeline image, so tasks run exactly the same code. A
 full Airflow backfill leaves the warehouse identical to `make backfill`.
 To run the lake on **AWS S3** instead, change `.env`; see [docs/AWS.md](docs/AWS.md).

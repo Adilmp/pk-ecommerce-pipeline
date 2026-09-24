@@ -7,7 +7,8 @@
      - same for that month's quarantine rows
    If anything fails, the transaction rolls back and the warehouse is unchanged.
 
-Delete-then-insert per month makes the load idempotent (decision D10).
+Delete-then-insert per month makes the load idempotent (decision D10). Loads never overlap:
+they share the staging tables, so a Postgres advisory lock lets only one run at a time.
 """
 from __future__ import annotations
 
@@ -21,6 +22,12 @@ from pipeline.db import SQL_DIR, connect, run_sql_file
 from pipeline.schema import QUARANTINE_SCHEMA, SILVER_SCHEMA
 
 log = logging.getLogger("pipeline.gold")
+
+
+# Every load shares the staging tables, so loads must not overlap: a second load waits on
+# this Postgres advisory lock until the first has committed (decision D26). A session-level
+# advisory lock is released when its connection closes, even if the load fails.
+LOAD_LOCK_ID = 20160701
 
 
 class LoadCheckError(Exception):
@@ -55,6 +62,15 @@ def load_month(spark: SparkSession, settings: Settings, month: str) -> dict:
         .parquet(settings.lake_path(QUARANTINE_PREFIX, f"order_month={month}"))
         .withColumn("order_month", F.lit(month))
     )
+    with connect(settings, autocommit=True) as lock:
+        lock.execute("SELECT pg_advisory_lock(%s)", (LOAD_LOCK_ID,))
+        facts, quarantined = _stage_and_load(settings, month, silver, quarantine)
+
+    log.info("gold   %s | facts %s | quarantine %s", month, f"{facts:,}", f"{quarantined:,}")
+    return {"fact_rows": facts, "quarantine_rows": quarantined}
+
+
+def _stage_and_load(settings: Settings, month: str, silver, quarantine) -> tuple[int, int]:
     write_staging(silver, settings, "staging.stg_order_items")
     write_staging(quarantine, settings, "staging.stg_quarantine")
 
@@ -79,6 +95,4 @@ def load_month(spark: SparkSession, settings: Settings, month: str) -> dict:
                 f"{month}: staged {staged} facts / {staged_q} quarantine rows, "
                 f"loaded {facts} / {quarantined}"
             )
-
-    log.info("gold   %s | facts %s | quarantine %s", month, f"{facts:,}", f"{quarantined:,}")
-    return {"fact_rows": facts, "quarantine_rows": quarantined}
+    return facts, quarantined

@@ -11,8 +11,8 @@ Every data-quality rule and modelling choice traces back to a finding here.
 
 | | |
 |---|---|
-| Lines in the file | 1,048,575 |
-| Completely blank lines | 464,051 (44%) |
+| Rows in the file | 1,048,576 including the header (Excel's maximum) |
+| Completely blank rows | 464,051 (44% of the 1,048,575 data rows) |
 | **Real rows (order items)** | **584,524** |
 | Orders (`increment_id`) | 408,782 |
 | Customers | 115,327 |
@@ -23,7 +23,8 @@ Every data-quality rule and modelling choice traces back to a finding here.
 ## Findings
 
 ### F1 — The file was exported from Excel, and Excel padded it
-1,048,575 lines is exactly Excel's maximum row count. Every line after the real data is blank.
+1,048,576 rows, header included, is exactly Excel's maximum row count (2^20). Every row after
+the real data is blank.
 **Action:** remove fully blank lines and *count* them. They are not records, so they are not
 quarantined (see D16).
 
