@@ -8,7 +8,7 @@ on:
 jobs:
   unit:
     name: Lint + unit tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # pinned: "latest" moves to Ubuntu 26 in October 2026
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -26,7 +26,7 @@ jobs:
 
   e2e:
     name: End-to-end (Docker Compose)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # pinned: "latest" moves to Ubuntu 26 in October 2026
     needs: unit
     steps:
       - uses: actions/checkout@v5

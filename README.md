@@ -20,6 +20,7 @@ quarantined with the reason.
 | Completed revenue | **PKR 965.2 million** |
 | Full 26-month backfill | **~4 minutes** on a laptop, one command |
 | Tests | 45 unit tests + an end-to-end test in CI |
+| Scheduling | Makefile/CLI, or an optional Airflow DAG (one run per month, catch-up backfill) |
 
 ## Architecture
 
@@ -220,17 +221,28 @@ runs the backfill and prints the report. Afterwards:
 | `make report` | Print the headline numbers |
 | `make psql` | SQL shell in the warehouse, e.g. `SELECT * FROM analytics.monthly_kpis;` |
 | `make charts` | Regenerate the charts |
+| `make airflow` | Optional: start Airflow on http://localhost:8080; it backfills every month itself |
 | `make test` · `make test-e2e` · `make lint` | Unit tests · end-to-end test · lint |
 | `make down` · `make clean` | Stop (keep data) · stop and delete all data |
 
 The lake's web console is at http://localhost:9001/rustfs/console/ (credentials are in `.env`).
+
+### Scheduling with Airflow (optional)
+
+`make airflow` starts Airflow 3 with one DAG, [`pk_ecommerce_monthly`](airflow/dags/pk_ecommerce_monthly.py):
+one DAG run per order month, each running **ingest → silver → gold**. With `catchup=True`,
+Airflow creates a run for every month from July 2016 to August 2018 and processes them in order,
+so **Airflow performs the backfill itself**. Retries are safe because every task is idempotent.
+The Airflow image is built on top of the pipeline image, so tasks run exactly the same code. A
+full Airflow backfill leaves the warehouse identical to `make backfill`.
 To run the lake on **AWS S3** instead, change `.env`; see [docs/AWS.md](docs/AWS.md).
 
 ## Design decisions
 
 26 decisions are written up in [DECISIONS.md](docs/DECISIONS.md). The most important:
 
-- **Idempotent, month-by-month loads:** a failed run is fixed by running it again (D10).
+- **Idempotent, month-by-month loads:** a failed run is fixed by running it again (D10), which
+  is also what makes Airflow's retries and catch-up safe (D15).
 - **Quarantine, never drop:** with reason codes and raw values (D9, D16).
 - **Revenue at the item grain**, because `grand_total` is order-level (D18).
 - **Raw is immutable**, so any bug can be fixed and replayed (D3). This was used for real to
@@ -257,6 +269,7 @@ To run the lake on **AWS S3** instead, change `.env`; see [docs/AWS.md](docs/AWS
 │   ├── schema/          # star schema, quarantine, run log, staging
 │   ├── load/            # idempotent upserts and delete + insert
 │   └── analytics/       # business views
+├── airflow/             # optional: DAG (one run per month) + image built on the pipeline image
 ├── tests/
 │   ├── unit/            # 45 tests, no services needed
 │   ├── e2e/             # full pipeline on a fixture, own bucket + database

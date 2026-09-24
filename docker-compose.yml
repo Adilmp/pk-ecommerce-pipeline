@@ -63,6 +63,36 @@ services:
         condition: service_healthy
     profiles: ["job"]
 
+  # Optional: Airflow scheduling the same pipeline, one DAG run per month (`make airflow`).
+  airflow:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    image: pk-ecommerce-airflow:latest
+    env_file: .env
+    environment:
+      HOME: /home/app
+      SPARK_CONF_DIR: /app/conf
+      SPARK_DRIVER_MEMORY: 1g
+      AIRFLOW__CORE__DAGS_FOLDER: /app/airflow/dags
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      # Start the DAG straight away: every step is idempotent, so the backfill is safe to run.
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${PGUSER}:${PGPASSWORD}@postgres:5432/airflow
+      # Local demo only: every visitor to the UI is an admin, no login.
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    volumes:
+      - .:/app
+    ports:
+      - "8080:8080"   # Airflow UI
+    depends_on:
+      objectstore:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    profiles: ["airflow"]
+
 volumes:
   lake-data:
   warehouse-data:

@@ -6,7 +6,7 @@ answer you can give in an interview. Learn the *Say it* lines; understand the re
 | # | Decision | # | Decision |
 |---|---|---|---|
 | D1 | Batch, not streaming | D14 | Configuration from environment variables |
-| D2 | ETL for cleaning, ELT for analytics | D15 | Simple orchestration, Airflow-ready |
+| D2 | ETL for cleaning, ELT for analytics | D15 | CLI first, Airflow on top |
 | D3 | Raw → silver → gold layers | D16 | ERROR quarantines, WARN flags |
 | D4 | S3-compatible data lake | D17 | Recompute spreadsheet columns |
 | D5 | Parquet after the raw layer | D18 | Revenue per item, not `grand_total` |
@@ -55,7 +55,7 @@ re-collecting data."*
 **Why:** Object storage is cheap, effectively unlimited, and **separates storage from compute**:
 Spark can be scaled or replaced without moving the data.
 **Real-world proof:** the project was designed on MinIO. MinIO deleted its images from Docker
-Hub on 11 September 2026, days before this was built. Because the code only speaks the S3 API,
+Hub on 11 September 2026, two weeks before this was built. Because the code only speaks the S3 API,
 swapping to RustFS was a one-line change in `docker-compose.yml`. Moving to AWS is the same:
 change the endpoint in `.env` (see [AWS.md](AWS.md)).
 **Say it:** *"Storage and compute are decoupled and the code only speaks the S3 API. When MinIO
@@ -149,13 +149,23 @@ The end-to-end test uses this too: it points the same code at a separate bucket 
 **Say it:** *"Config lives in the environment, so the same code runs locally, in tests and on AWS,
 and no secret is ever in git."*
 
-## D15: Simple orchestration now, Airflow-ready
-**Decision:** A CLI (`python -m pipeline.run --month 2017-03` / `--all`) driven by a Makefile.
-Every run of every step is logged in `dq.pipeline_runs`, including failures and their error.
-**Why:** A working, idempotent pipeline beats a half-configured scheduler. Each (month, step) is
-an independent idempotent task, which maps one-to-one onto an Airflow task.
-**Say it:** *"Each step is a separate idempotent task with its own run log, so moving it into an
-Airflow DAG is mostly wiring."*
+## D15: Simple orchestration first, then Airflow on top
+**Decision:** The core is a CLI (`python -m pipeline.run --month 2017-03` / `--all`) driven by a
+Makefile. On top of it, an optional **Airflow DAG** runs the same three steps (ingest → silver →
+gold) as one DAG run per month. Every run of every step, from either route, is logged in
+`dq.pipeline_runs`.
+**Why:** A working, idempotent pipeline comes first; a scheduler only wires it together. Because
+each (month, step) is already an independent, idempotent task, the DAG is ~30 lines of wiring:
+- `schedule="@monthly"` with `catchup=True`: Airflow itself creates one run per month from July
+  2016 to August 2018. **Airflow does the backfill.**
+- `max_active_runs=1`: months run in order, one at a time (they share the staging tables).
+- `retries=2`: safe, because every task is idempotent.
+- The Airflow image is built *on top of* the pipeline image, so tasks run exactly the same code.
+
+**Verified:** a full Airflow backfill of all 26 months left the warehouse identical to the
+Makefile run (same row counts, same revenue to the paisa).
+**Say it:** *"The same idempotent tasks run from a Makefile or from Airflow. In Airflow it's one
+DAG run per month with catch-up, so Airflow performs the backfill, and retries are safe."*
 
 ---
 

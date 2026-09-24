@@ -6,7 +6,7 @@ COMPOSE := docker compose
 JOB     := $(COMPOSE) run --rm pipeline
 MONTH   ?= 2016-07
 
-.PHONY: help env build up down init ingest run backfill report charts test test-e2e lint psql all clean
+.PHONY: help env build up down init ingest run backfill report charts test test-e2e lint psql all airflow airflow-down clean
 
 help:  ## show this help
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-10s %s\n", $$1, $$2}'
@@ -21,7 +21,7 @@ up: env  ## start the data lake (RustFS) and the warehouse (Postgres)
 	$(COMPOSE) up -d --wait objectstore postgres
 
 down:  ## stop everything (data is kept)
-	$(COMPOSE) down
+	$(COMPOSE) --profile airflow down
 
 init: up  ## create the bucket, database, tables and views (safe to rerun)
 	$(JOB) python -m pipeline.init
@@ -55,5 +55,11 @@ psql: up  ## open a SQL shell in the warehouse
 
 all: build init ingest backfill report  ## the whole pipeline, from scratch
 
+airflow: build init  ## optional: start Airflow on http://localhost:8080 (the DAG backfills every month)
+	$(COMPOSE) --profile airflow up -d --build airflow
+
+airflow-down:  ## stop Airflow
+	$(COMPOSE) --profile airflow stop airflow
+
 clean:  ## stop everything AND delete the lake and warehouse data
-	$(COMPOSE) down -v
+	$(COMPOSE) --profile airflow down -v

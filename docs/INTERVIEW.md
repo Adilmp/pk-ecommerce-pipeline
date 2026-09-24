@@ -21,7 +21,8 @@ Every number here comes from the actual run.
 >
 > Every load is idempotent, so a failed run is fixed by running it again, and every stage proves
 > its row counts add up. It all runs in Docker Compose with one command, it has 45 unit tests and
-> an end-to-end test in CI, and moving it to AWS S3 is a config change.
+> an end-to-end test in CI, Airflow can schedule it month by month, and moving it to AWS S3
+> is a config change.
 >
 > It connects to my background: I spent two years on data quality for AI training data at CNTXT
 > and Turing, and this is the pipeline built around that skill."
@@ -102,16 +103,18 @@ including failures, is logged in a runs table."
 month in object storage, so months can be processed in parallel. The warehouse would move to
 Redshift or BigQuery, and I'd raise the shuffle partitions back up."
 
-**How would you schedule it?**
-"Each step is already a separate, idempotent, logged task per month, so each becomes an Airflow
-task with retries, and a monthly schedule with catch-up does the backfill."
+**How is it scheduled?**
+"Two ways, running the same code. A Makefile and CLI for development and CI, and an Airflow DAG:
+one run per month, ingest then silver then gold, with catch-up on, so Airflow itself backfills all
+26 months. Retries are safe because every task is idempotent. I checked that the Airflow backfill
+leaves the warehouse identical to the Makefile run."
 
 **How would you move it to AWS?**
 "S3 for the lake: change the endpoint and keys in the environment. An IAM user or role with access
 to that one bucket only. EMR or Glue for Spark, Redshift for the warehouse."
 
 **What would you do differently with more time?**
-"Airflow for scheduling, dbt for the SQL layer with its tests, SCD Type 2 for product categories,
+"dbt for the SQL layer with its tests, Airflow alerts on failure, SCD Type 2 for product categories,
 and alerting when the quarantine rate jumps, like it did in January 2018."
 
 ---

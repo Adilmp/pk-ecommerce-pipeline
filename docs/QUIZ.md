@@ -4,7 +4,7 @@ Answer each question **out loud or on paper first**, then open the answer. If yo
 wrong, reread the decision it points to (D1–D26 in [DECISIONS.md](DECISIONS.md)) and try the
 question again tomorrow: spaced repetition is what makes it stick.
 
-Sections follow the build steps in [STEPS.md](STEPS.md). 60 questions in total.
+Sections follow the build steps in [STEPS.md](STEPS.md). 65 questions in total.
 
 ---
 
@@ -92,10 +92,11 @@ Change the endpoint, bucket and keys in `.env`. No code changes, because the cod
 the S3 API and all configuration comes from the environment. (D4, D14, AWS.md)
 </details>
 
-**14. Why isn't Airflow the core of the pipeline?**
+**14. Why was the CLI built first, and Airflow added on top?**
 <details><summary>Answer</summary>
-A working, idempotent pipeline beats a half-configured scheduler. Each (month, step) is already an
-independent, idempotent, logged task, so moving it into an Airflow DAG is mostly wiring. (D15)
+A working, idempotent pipeline beats a half-configured scheduler. Because each (month, step) was
+already an independent, idempotent, logged task, the Airflow DAG turned out to be ~30 lines of
+wiring around the same CLI. (D15)
 </details>
 
 ---
@@ -366,6 +367,40 @@ first (`make backfill`).
 <details><summary>Answer</summary>
 One row per step per month: status, timings, metrics (row counts, error counts) and the error
 message if it failed. Failures are the runs you most need to see later.
+</details>
+
+**Airflow**
+
+**61. What does `catchup=True` do in the DAG?**
+<details><summary>Answer</summary>
+When the DAG starts, Airflow creates a run for every missed schedule interval between
+`start_date` and now (or `end_date`): here one run per month from July 2016 to August 2018. That's
+how Airflow performs the backfill.
+</details>
+
+**62. What is the logical date of a DAG run, and how does each task know which month to process?**
+<details><summary>Answer</summary>
+The logical date identifies which period the run is for (2017-03-01 for the March 2017 run), not
+when it actually ran. Tasks use the template `{{ logical_date.strftime('%Y-%m') }}`, which Airflow
+fills in per run.
+</details>
+
+**63. Why `max_active_runs=1`?**
+<details><summary>Answer</summary>
+Months must run one at a time: they share the staging tables, and running in order keeps the
+dimensions' "latest known" values correct.
+</details>
+
+**64. Why are `retries=2` safe here?**
+<details><summary>Answer</summary>
+Every task is idempotent. Retrying a half-finished task replaces the month rather than
+duplicating it.
+</details>
+
+**65. Why does the DAG call the same CLI (`python -m pipeline.run`) instead of containing the logic?**
+<details><summary>Answer</summary>
+The logic stays in one tested place; the DAG only schedules it. The pipeline also works without
+Airflow (Makefile, CI), and the Airflow image is built on the pipeline image, so it's the same code.
 </details>
 
 ---

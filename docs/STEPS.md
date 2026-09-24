@@ -13,7 +13,7 @@ After each step, the matching section of [QUIZ.md](QUIZ.md) checks you understoo
 | 4 | Clean + data quality (raw → silver) | `transform.py`, `quality.py`, `silver.py` |
 | 5 | Warehouse schema | `sql/schema/*.sql` |
 | 6 | Load gold (idempotent) | `gold.py`, `sql/load/*.sql` |
-| 7 | Orchestration + backfill | `run.py` |
+| 7 | Orchestration + backfill | `run.py`, `airflow/dags/` |
 | 8 | Analytics SQL + charts | `sql/analytics/*.sql`, `charts.py` |
 | 9 | Tests + CI | `tests/`, `.github/workflows/ci.yml` |
 | 10 | AWS and shipping | [AWS.md](AWS.md), `README.md` |
@@ -76,6 +76,11 @@ surrogate-key lookups. Check 3 (D21) confirms every staged row landed.
 backfill, every (month, step) logged in `dq.pipeline_runs`, a summary table at the end, and a
 non-zero exit code on failure.
 **Run:** `make backfill` → 26 months in ~4 minutes: **584,524 read → 574,758 clean + 9,766 quarantined**.
+
+**Airflow (optional):** `airflow/dags/pk_ecommerce_monthly.py` runs the same steps as one DAG run
+per month (`@monthly`, `catchup=True`, `max_active_runs=1`, `retries=2`).
+**Run:** `make airflow` → open http://localhost:8080; Airflow backfills all 26 months by itself,
+and the warehouse ends up identical to the Makefile run.
 
 ## Step 8: Analytics SQL + charts
 `sql/analytics/`: monthly KPIs with `LAG` growth and a running total, category share and rank,
